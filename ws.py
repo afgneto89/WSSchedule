@@ -148,5 +148,5 @@ if changed_prices:
     send_changed_prices_email(changed_prices)
     print("Sucesso ao enviar email de preços alterados")
 
-print(new_rows)
-print(changed_prices)
+#print(new_rows)
+#print(changed_prices)
