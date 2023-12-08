@@ -95,7 +95,7 @@ df = pd.DataFrame(data)
 df['Data de execução'] = data_execucao
 
 # Abra o arquivo CSV existente ou crie um novo se não existir
-csv_file_path = 'resultado.csv'
+csv_file_path = 'https://raw.githubusercontent.com/afgneto89/WSSchedule/main/resultado.csv'
 try:
     existing_df = pd.read_csv(csv_file_path)
 except FileNotFoundError:
