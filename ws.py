@@ -3,11 +3,8 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import re
 import datetime
-from openpyxl import load_workbook
-
 import smtplib
 import email.message
-
 
 def send_new_rows_email(new_rows, prod_name):
     email_content = f"Olá, um novo item foi inserido para monitoramento dos preços.\n\n<br>Produto: {prod_name}\n\n"
@@ -28,7 +25,6 @@ def send_new_rows_email(new_rows, prod_name):
     s.login(msg['From'], password)
     s.sendmail(msg['From'], [msg['To']], msg.as_string())
 
-
 def send_changed_prices_email(changed_prices):
     email_content = "Preços foram alterados:\n"
     for row in changed_prices:
@@ -46,7 +42,6 @@ def send_changed_prices_email(changed_prices):
     s.starttls()
     s.login(msg['From'], password)
     s.sendmail(msg['From'], [msg['To']], msg.as_string())
-
 
 # URL da página para obter os preços
 url = 'https://co.frubana.com/bog/Desechables/contenedores/contenedor-j2-darnel-unid'
@@ -99,45 +94,42 @@ df = pd.DataFrame(data)
 # Adicione a coluna de "Data de Execução"
 df['Data de execução'] = data_execucao
 
-# Abra o arquivo Excel existente ou crie um novo se não existir
+# Abra o arquivo CSV existente ou crie um novo se não existir
+csv_file_path = 'resultado.csv'
 try:
-    book = load_workbook('resultado.xlsx')
+    existing_df = pd.read_csv(csv_file_path)
 except FileNotFoundError:
-    book = pd.ExcelWriter('resultado.xlsx', engine='openpyxl').book
-    book.create_sheet('Sheet1')
+    df.to_csv(csv_file_path, index=False)
+    existing_df = pd.read_csv(csv_file_path)
 
-# Se a planilha 'Sheet1' já existir, compare os preços com base na última data de execução para cada quantidade
-if 'Sheet1' in book.sheetnames:
-    existing_df = pd.read_excel('resultado.xlsx', sheet_name='Sheet1')
+# Compare os preços com base na última data de execução para cada quantidade
+new_rows = []  # Armazena as novas linhas a serem adicionadas
+changed_prices = []  # Armazena as linhas com preços diferentes
 
-    new_rows = []  # Armazena as novas linhas a serem adicionadas
-    changed_prices = []  # Armazena as linhas com preços diferentes
+# Compare os preços com base na última data de execução para cada quantidade
+for index, row in df.iterrows():
+    min_quantity = row['Min Quantity']
+    price = row['Price']
 
-    # Compare os preços com base na última data de execução para cada quantidade
-    for index, row in df.iterrows():
-        min_quantity = row['Min Quantity']
-        price = row['Price']
+    # Verifique se a quantidade já existe no arquivo CSV anterior
+    if (existing_df['Min Quantity'] == min_quantity).any():
+        last_execution_date = existing_df[existing_df['Min Quantity'] == min_quantity]['Data de execução'].max()
+        last_price = existing_df[(existing_df['Min Quantity'] == min_quantity) & (
+                    existing_df['Data de execução'] == last_execution_date)]['Price'].values[0]
 
-        # Verifique se a quantidade já existe na planilha anterior
-        if (existing_df['Min Quantity'] == min_quantity).any():
-            last_execution_date = existing_df[existing_df['Min Quantity'] == min_quantity]['Data de execução'].max()
-            last_price = existing_df[(existing_df['Min Quantity'] == min_quantity) & (
-                        existing_df['Data de execução'] == last_execution_date)]['Price'].values[0]
+        if price != last_price:
+            # Atualize o preço somente se houver variação
+            existing_df = pd.concat([existing_df, row.to_frame().T], ignore_index=True)
+            changed_prices.append(row)
 
-            if price != last_price:
-                # Atualize o preço somente se houver variação
-                existing_df = pd.concat([existing_df, row.to_frame().T], ignore_index=True)
-                changed_prices.append(row)
+    else:
+        # Adicione a nova linha se a quantidade e o preço não existirem no arquivo CSV
+        if not (existing_df['Min Quantity'] == min_quantity).any() and not (existing_df['Price'] == price).any():
+            existing_df = pd.concat([existing_df, row.to_frame().T], ignore_index=True)
+            new_rows.append(row)
 
-        else:
-            # Adicione a nova linha se a quantidade e o preço não existirem na planilha
-            if not (existing_df['Min Quantity'] == min_quantity).any() and not (existing_df['Price'] == price).any():
-                existing_df = pd.concat([existing_df, row.to_frame().T], ignore_index=True)
-                new_rows.append(row)
-
-    # Salve as alterações no arquivo Excel
-    with pd.ExcelWriter('resultado.xlsx', engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
-        existing_df.to_excel(writer, 'Sheet1', index=False)
+# Salve as alterações no arquivo CSV
+existing_df.to_csv(csv_file_path, index=False, mode='w')
 
 # Após o loop, envie o email apenas se houver novas linhas ou preços diferentes
 if new_rows:
