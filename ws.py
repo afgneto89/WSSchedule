@@ -1,47 +1,41 @@
+import os
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import re
 import datetime
 import smtplib
-import email.message
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
 
-def send_new_rows_email(new_rows, prod_name):
-    email_content = f"Olá, um novo item foi inserido para monitoramento dos preços.\n\n<br>Produto: {prod_name}\n\n"
+def send_email(subject, body, to_email, attachment_path=None):
+    # Configurações do servidor SMTP do Gmail
+    smtp_server = "smtp.gmail.com"
+    smtp_port = 465
+    smtp_username = os.getenv('GMAIL_USERNAME')  # Substitua com a variável de ambiente do seu e-mail do Gmail
+    smtp_password = os.getenv('GMAIL_PASSWORD')  # Substitua com a variável de ambiente da senha da sua conta do Gmail
 
-    for row in new_rows:
-        email_content += f"<br>Min Quantity: {row['Min Quantity']}\nUnit: {row['Unit']}\nPrice: {row['Price']}\n\n"
+    # Configurar a mensagem de e-mail
+    msg = MIMEMultipart()
+    msg['From'] = smtp_username
+    msg['To'] = to_email
+    msg['Subject'] = subject
 
-    msg = email.message.Message()
-    msg['Subject'] = 'Novo(s) item(ns) adicionado(s) ao monitoramento'
-    msg['From'] = 'afneto@ajover.com'
-    msg['To'] = 'afneto@ajover.com'
-    password = 'Processos@23'
-    msg.add_header('Content-Type', 'text/html', charset='utf-8')
-    msg.set_payload(email_content, charset='utf-8')
+    # Adicionar corpo do e-mail
+    msg.attach(MIMEText(body, 'html'))
 
-    s = smtplib.SMTP('172.35.5.22:587')
-    s.starttls()
-    s.login(msg['From'], password)
-    s.sendmail(msg['From'], [msg['To']], msg.as_string())
+    # Adicionar anexo, se fornecido
+    if attachment_path:
+        with open(attachment_path, "rb") as attachment:
+            part = MIMEApplication(attachment.read(), Name="resultado.csv")
+            part['Content-Disposition'] = f'attachment; filename="{attachment_path}"'
+            msg.attach(part)
 
-def send_changed_prices_email(changed_prices):
-    email_content = "Preços foram alterados:\n"
-    for row in changed_prices:
-        email_content += f"Min Quantity: {row['Min Quantity']}, Price: {row['Price']}\n"
-
-    msg = email.message.Message()
-    msg['Subject'] = 'Preços foram alterados na planilha'
-    msg['From'] = 'afneto@ajover.com'
-    msg['To'] = 'afneto@ajover.com'
-    password = 'Processos@23'
-    msg.add_header('Content-Type', 'text/html')
-    msg.set_payload(email_content)
-
-    s = smtplib.SMTP('172.35.5.22:587')
-    s.starttls()
-    s.login(msg['From'], password)
-    s.sendmail(msg['From'], [msg['To']], msg.as_string())
+    # Configurar conexão SMTP segura usando SSL
+    with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
+        server.login(smtp_username, smtp_password)
+        server.sendmail(smtp_username, to_email, msg.as_string())
 
 # URL da página para obter os preços
 url = 'https://co.frubana.com/bog/Desechables/contenedores/contenedor-j2-darnel-unid'
@@ -133,11 +127,21 @@ existing_df.to_csv(csv_file_path, index=False, mode='w')
 
 # Após o loop, envie o email apenas se houver novas linhas ou preços diferentes
 if new_rows:
-    send_new_rows_email(new_rows, prod_name)
+    email_subject = 'Novo(s) item(ns) adicionado(s) ao monitoramento'
+    email_body = f"Olá, um novo item foi inserido para monitoramento dos preços.<br>Produto: {prod_name}<br>"
+    for row in new_rows:
+        email_body += f"<br>Min Quantity: {row['Min Quantity']}<br>Unit: {row['Unit']}<br>Price: {row['Price']}<br>"
+
+    send_email(email_subject, email_body, os.getenv('DESTINATION_EMAIL'))  # Substitua com a variável de ambiente do e-mail de destino
     print("Sucesso ao enviar email de novas linhas")
 
 if changed_prices:
-    send_changed_prices_email(changed_prices)
+    email_subject = 'Preços foram alterados na planilha'
+    email_body = "Preços foram alterados:<br>"
+    for row in changed_prices:
+        email_body += f"Min Quantity: {row['Min Quantity']}, Price: {row['Price']}<br>"
+
+    send_email(email_subject, email_body, os.getenv('DESTINATION_EMAIL'))  # Substitua com a variável de ambiente do e-mail de destino
     print("Sucesso ao enviar email de preços alterados")
 
 print(new_rows)
