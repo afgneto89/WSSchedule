@@ -11,6 +11,13 @@ jobs:
 
       - name: 'Check repositorio'
         uses: actions/checkout@v4
+     
+      - name: 'Configurar Variáveis de Ambiente'
+        run: |
+          echo "GMAIL_USERNAME=${{ secrets.GMAIL_USERNAME }}" >> $GITHUB_ENV
+          echo "GMAIL_PASSWORD=${{ secrets.GMAIL_PASSWORD }}" >> $GITHUB_ENV
+          echo "DESTINATION_EMAIL=${{ secrets.DESTINATION_EMAIL }}" >> $GITHUB_ENV
+
 
       - name: 'Installar Python'
         uses: actions/setup-python@v4
@@ -20,3 +27,7 @@ jobs:
 
       - name: 'executar scrapping'
         run: python ws.py
+        env:
+          GMAIL_USERNAME: ${{ secrets.GMAIL_USERNAME }}
+          GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
+          DESTINATION_EMAIL: ${{ secrets.DESTINATION_EMAIL }}
